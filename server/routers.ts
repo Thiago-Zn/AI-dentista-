@@ -169,11 +169,11 @@ export const appRouter = router({
           throw new Error("No audio file found for this consultation");
         }
 
-        // Transcribe audio using Whisper
+        // Transcribe audio using Whisper with speaker identification
         const result = await transcribeAudio({
           audioUrl: consultation.audioUrl,
           language: "pt",
-          prompt: "Consulta odontológica. Termos técnicos: cárie, gengivite, canal, restauração, periodontia, dente, molar, incisivo.",
+          prompt: "Consulta odontológica entre dentista e paciente. IMPORTANTE: Identifique e marque claramente cada falante usando 'Dentista:' ou 'Paciente:' no início de cada fala. Termos técnicos: cárie, gengivite, canal, restauração, periodontia, dente, molar, incisivo, prótese, implante.",
         });
 
         if ('error' in result) {

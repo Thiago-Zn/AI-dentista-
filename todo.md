@@ -97,3 +97,11 @@
 
 - [x] Fix React hooks ordering error in ConsultationDetail component (hooks called conditionally)
 - [x] Fix consultation ID not being properly stored after creation in NewConsultation page
+
+
+## New Features to Implement
+
+- [x] Improve transcription speaker detection (Dentista/Paciente) with better parsing
+- [x] Create chat-style transcription visualization with distinct blocks for each speaker
+- [x] Add toggle between "Visualização" and "Editar Texto" modes
+- [x] Style dentist messages (left-aligned, blue) and patient messages (right-aligned, green)

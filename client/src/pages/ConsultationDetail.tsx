@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SOAPNoteViewer } from "@/components/SOAPNoteViewer";
 import { SOAPNoteEditor } from "@/components/SOAPNoteEditor";
+import { TranscriptionViewer } from "@/components/TranscriptionViewer";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ArrowLeft, FileText, AudioLines, Download, CheckCircle, Edit } from "lucide-react";
 import { useLocation, useParams } from "wouter";
@@ -223,43 +224,16 @@ export default function ConsultationDetail() {
               </Card>
             )}
           </TabsContent>
-
           <TabsContent value="transcript" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Transcrição da Consulta</CardTitle>
-                <CardDescription>
-                  Transcrição automática gerada por IA
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {consultation.transcript ? (
-                  <div className="prose prose-sm max-w-none">
-                    <p className="whitespace-pre-wrap text-foreground leading-relaxed">
-                      {consultation.transcript}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <AudioLines className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      Transcrição não disponível
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {consultation.audioUrl && (
+            {consultation.transcript ? (
+              <TranscriptionViewer transcript={consultation.transcript} />
+            ) : (
               <Card>
-                <CardHeader>
-                  <CardTitle>Áudio da Consulta</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <audio controls className="w-full">
-                    <source src={consultation.audioUrl} type="audio/webm" />
-                    Seu navegador não suporta o elemento de áudio.
-                  </audio>
+                <CardContent className="py-12 text-center">
+                  <AudioLines className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    Transcrição não disponível
+                  </p>
                 </CardContent>
               </Card>
             )}
