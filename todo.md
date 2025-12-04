@@ -105,3 +105,10 @@
 - [x] Create chat-style transcription visualization with distinct blocks for each speaker
 - [x] Add toggle between "Visualização" and "Editar Texto" modes
 - [x] Style dentist messages (left-aligned, blue) and patient messages (right-aligned, green)
+- [x] Add mandatory transcription review step before AI analysis
+- [x] Create transcription review page with edit capability
+- [x] Add "Confirmar e Analisar" button to proceed to AI analysis
+- [x] Update workflow: Audio → Transcription → Review → AI Analysis → SOAP
+- [x] Store Whisper API segment data with timestamps in database
+- [ ] Add timestamp display in transcription speech bubbles
+- [ ] Enable audio playback with sync to transcript timestamps

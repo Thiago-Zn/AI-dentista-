@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
 import NewConsultation from "./pages/NewConsultation";
 import ConsultationDetail from "./pages/ConsultationDetail";
+import TranscriptionReview from "./pages/TranscriptionReview";
 import Patients from "./pages/Patients";
 import PatientDetail from "./pages/PatientDetail";
 
@@ -15,6 +16,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Dashboard} />
       <Route path={"/new-consultation"} component={NewConsultation} />
+      <Route path={"/consultation/:id/review"} component={TranscriptionReview} />
       <Route path={"/consultation/:id"} component={ConsultationDetail} />
       <Route path={"/patients"} component={Patients} />
       <Route path={"/patient/:id"} component={PatientDetail} />

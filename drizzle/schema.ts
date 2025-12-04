@@ -57,6 +57,7 @@ export const consultations = mysqlTable("consultations", {
   
   // Transcription
   transcript: text("transcript"),
+  transcriptSegments: json("transcriptSegments"),  // Whisper API segments with timestamps
   
   // AI Analysis and SOAP note
   soapNote: json("soapNote").$type<SOAPNote>(),

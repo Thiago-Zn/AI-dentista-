@@ -155,6 +155,24 @@ export const appRouter = router({
         return { success: true, audioUrl: url };
       }),
 
+    updateTranscript: protectedProcedure
+      .input(z.object({
+        consultationId: z.number(),
+        transcript: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const consultation = await getConsultationById(input.consultationId);
+        if (!consultation || consultation.dentistId !== ctx.user.id) {
+          throw new Error("Consultation not found or access denied");
+        }
+
+        await updateConsultation(input.consultationId, {
+          transcript: input.transcript,
+        });
+
+        return { success: true };
+      }),
+
     transcribe: protectedProcedure
       .input(z.object({
         consultationId: z.number(),
@@ -180,12 +198,13 @@ export const appRouter = router({
           throw new Error(result.error);
         }
 
-        // Update consultation with transcript
+        // Update consultation with transcript and segments (with timestamps)
         await updateConsultation(input.consultationId, {
           transcript: result.text,
+          transcriptSegments: result.segments || [],
         });
 
-        return { success: true, transcript: result.text };
+        return { success: true, transcript: result.text, segments: result.segments };
       }),
 
     analyzeAndGenerateSOAP: protectedProcedure

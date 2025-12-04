@@ -115,15 +115,10 @@ export default function NewConsultation() {
           consultationId,
         });
 
-        toast.success("Transcrição concluída. Analisando com IA...");
-
-        // Analyze and generate SOAP
-        await analyzeMutation.mutateAsync({
-          consultationId,
-        });
-
-        toast.success("Nota clínica gerada com sucesso!");
-        setLocation(`/consultation/${consultationId}`);
+        toast.success("Transcrição concluída! Revise antes de continuar.");
+        
+        // Redirect to review page instead of analyzing immediately
+        setLocation(`/consultation/${consultationId}/review`);
       };
     } catch (error) {
       toast.error("Erro ao processar consulta");
