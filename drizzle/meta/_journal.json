@@ -15,6 +15,13 @@
       "when": 1764814417172,
       "tag": "0001_stale_ender_wiggin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1764816005827,
+      "tag": "0002_tan_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

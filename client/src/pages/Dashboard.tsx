@@ -67,6 +67,12 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground">Assistente de IA para Odontologia</p>
           </div>
           <div className="flex items-center gap-4">
+            <Button variant="outline" asChild>
+              <Link href="/patients">
+                <User className="mr-2 h-4 w-4" />
+                Pacientes
+              </Link>
+            </Button>
             <div className="text-right">
               <p className="text-sm font-medium">{user.name}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>

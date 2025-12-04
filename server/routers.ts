@@ -22,6 +22,7 @@ import { transcribeAudio } from "./_core/voiceTranscription";
 import { invokeLLM } from "./_core/llm";
 import { SOAPNote } from "../drizzle/schema";
 import { nanoid } from "nanoid";
+import { generateConsultationPDF } from "./pdfGenerator";
 
 export const appRouter = router({
   system: systemRouter,
@@ -397,6 +398,34 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
         });
 
         return { success: true };
+      }),
+
+    exportPDF: protectedProcedure
+      .input(z.object({
+        consultationId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const consultation = await getConsultationById(input.consultationId);
+        if (!consultation || consultation.dentistId !== ctx.user.id) {
+          throw new Error("Consultation not found or access denied");
+        }
+
+        if (!consultation.soapNote) {
+          throw new Error("No SOAP note available for this consultation");
+        }
+
+        const pdfBuffer = await generateConsultationPDF({
+          patientName: consultation.patientName,
+          consultationDate: consultation.createdAt,
+          dentistName: ctx.user.name || "Dentista",
+          dentistCRO: ctx.user.croNumber || undefined,
+          soapNote: consultation.soapNote,
+        });
+
+        // Convert buffer to base64 for transmission
+        const base64PDF = pdfBuffer.toString('base64');
+
+        return { success: true, pdfData: base64PDF };
       }),
   }),
 

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ArrowLeft, Upload, Wand2 } from "lucide-react";
@@ -15,8 +16,14 @@ export default function NewConsultation() {
   const [, setLocation] = useLocation();
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<"patient" | "recording" | "processing">("patient");
+  const [patientMode, setPatientMode] = useState<"existing" | "new">("existing");
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [patientName, setPatientName] = useState("");
   const [consultationId, setConsultationId] = useState<number | null>(null);
+
+  const { data: patients } = trpc.patients.list.useQuery(undefined, {
+    enabled: !!user,
+  });
 
   const createConsultationMutation = trpc.consultations.create.useMutation();
   const uploadAudioMutation = trpc.consultations.uploadAudio.useMutation();
@@ -37,15 +44,33 @@ export default function NewConsultation() {
   }
 
   const handleStartRecording = async () => {
-    if (!patientName.trim()) {
-      toast.error("Por favor, insira o nome do paciente");
-      return;
+    let finalPatientId = 0;
+    let finalPatientName = "";
+
+    if (patientMode === "existing") {
+      if (!selectedPatientId) {
+        toast.error("Por favor, selecione um paciente");
+        return;
+      }
+      const patient = patients?.find(p => p.id === parseInt(selectedPatientId));
+      if (!patient) {
+        toast.error("Paciente não encontrado");
+        return;
+      }
+      finalPatientId = patient.id;
+      finalPatientName = patient.name;
+    } else {
+      if (!patientName.trim()) {
+        toast.error("Por favor, insira o nome do paciente");
+        return;
+      }
+      finalPatientName = patientName.trim();
     }
 
     try {
       const result = await createConsultationMutation.mutateAsync({
-        patientId: 0, // Temporary - in production, select from patients list
-        patientName: patientName.trim(),
+        patientId: finalPatientId,
+        patientName: finalPatientName,
       });
       
       setConsultationId(result.success ? Date.now() : null); // Use timestamp as temp ID
@@ -130,24 +155,70 @@ export default function NewConsultation() {
             <CardHeader>
               <CardTitle>Informações do Paciente</CardTitle>
               <CardDescription>
-                Insira os dados do paciente antes de iniciar a gravação
+                Selecione um paciente existente ou cadastre um novo
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="patientName">Nome do Paciente *</Label>
-                <Input
-                  id="patientName"
-                  placeholder="Ex: Maria Silva"
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleStartRecording();
-                    }
-                  }}
-                />
+                <Label>Modo de Seleção</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={patientMode === "existing" ? "default" : "outline"}
+                    onClick={() => setPatientMode("existing")}
+                    className="flex-1"
+                  >
+                    Paciente Existente
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={patientMode === "new" ? "default" : "outline"}
+                    onClick={() => setPatientMode("new")}
+                    className="flex-1"
+                  >
+                    Novo Paciente
+                  </Button>
+                </div>
               </div>
+
+              {patientMode === "existing" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="patientSelect">Selecionar Paciente *</Label>
+                  <Select value={selectedPatientId} onValueChange={setSelectedPatientId}>
+                    <SelectTrigger id="patientSelect">
+                      <SelectValue placeholder="Escolha um paciente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patients && patients.length > 0 ? (
+                        patients.map((patient) => (
+                          <SelectItem key={patient.id} value={patient.id.toString()}>
+                            {patient.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>
+                          Nenhum paciente cadastrado
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="patientName">Nome do Paciente *</Label>
+                  <Input
+                    id="patientName"
+                    placeholder="Ex: Maria Silva"
+                    value={patientName}
+                    onChange={(e) => setPatientName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleStartRecording();
+                      }
+                    }}
+                  />
+                </div>
+              )}
 
               <Button
                 size="lg"

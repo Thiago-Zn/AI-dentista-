@@ -60,3 +60,34 @@
 - [ ] Voice charting for periodontal records
 - [ ] Offline mode with sync
 - [ ] Analytics dashboard
+
+
+## Critical MVP Features (In Progress)
+
+### SOAP Note Editing
+- [x] Create SOAPNoteEditor component with editable forms
+- [x] Add edit mode toggle in consultation detail page
+- [x] Implement inline editing for all SOAP sections
+- [x] Add save/cancel functionality
+- [x] Validate data before saving
+- [x] Show visual feedback when editing
+
+### PDF Export
+- [x] Install PDF generation library (PDFKit or similar)
+- [x] Create PDF generation endpoint in backend
+- [x] Design professional PDF template with header/footer
+- [x] Include dentist information (name, CRO)
+- [x] Format SOAP note sections properly in PDF
+- [x] Add digital signature placeholder
+- [x] Implement download functionality
+- [x] Handle PDF generation errors
+
+### Patient Management
+- [x] Create Patients page with list view
+- [x] Create PatientForm component for add/edit
+- [x] Add patient search functionality
+- [x] Update new consultation flow to select existing patient
+- [x] Create patient detail page with consultation history
+- [x] Add patient fields: phone, CPF, allergies
+- [x] Link consultations to patient records
+- [x] Add navigation to patients page in header

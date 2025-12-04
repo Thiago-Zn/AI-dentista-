@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SOAPNoteViewer } from "@/components/SOAPNoteViewer";
+import { SOAPNoteEditor } from "@/components/SOAPNoteEditor";
 import { trpc } from "@/lib/trpc";
-import { Loader2, ArrowLeft, FileText, AudioLines, Download, CheckCircle } from "lucide-react";
+import { Loader2, ArrowLeft, FileText, AudioLines, Download, CheckCircle, Edit } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
@@ -13,6 +15,7 @@ export default function ConsultationDetail() {
   const [, setLocation] = useLocation();
   const params = useParams();
   const consultationId = params.id ? parseInt(params.id) : null;
+  const [isEditing, setIsEditing] = useState(false);
   
   const { user, loading: authLoading } = useAuth();
   const { data: consultation, isLoading } = trpc.consultations.getById.useQuery(
@@ -20,9 +23,23 @@ export default function ConsultationDetail() {
     { enabled: !!user && !!consultationId }
   );
 
+  const utils = trpc.useUtils();
+  
   const finalizeMutation = trpc.consultations.finalize.useMutation({
     onSuccess: () => {
       toast.success("Consulta finalizada com sucesso!");
+      utils.consultations.getById.invalidate({ id: consultationId! });
+    },
+  });
+
+  const updateSOAPMutation = trpc.consultations.updateSOAP.useMutation({
+    onSuccess: () => {
+      toast.success("Nota SOAP atualizada com sucesso!");
+      setIsEditing(false);
+      utils.consultations.getById.invalidate({ id: consultationId! });
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar nota SOAP");
     },
   });
 
@@ -66,8 +83,36 @@ export default function ConsultationDetail() {
     }
   };
 
+  const exportPDFMutation = trpc.consultations.exportPDF.useMutation({
+    onSuccess: (data) => {
+      // Convert base64 to blob and download
+      const byteCharacters = atob(data.pdfData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `consulta-${consultation?.patientName}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("PDF exportado com sucesso!");
+    },
+    onError: () => {
+      toast.error("Erro ao exportar PDF");
+    },
+  });
+
   const handleExportPDF = () => {
-    toast.info("Funcionalidade de exportação em desenvolvimento");
+    if (!consultationId) return;
+    exportPDFMutation.mutate({ consultationId });
   };
 
   return (
@@ -94,12 +139,28 @@ export default function ConsultationDetail() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleExportPDF}>
-                <Download className="mr-2 h-4 w-4" />
-                Exportar PDF
+              <Button variant="outline" onClick={handleExportPDF} disabled={exportPDFMutation.isPending}>
+                {exportPDFMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Gerando PDF...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Exportar PDF
+                  </>
+                )}
               </Button>
               
-              {consultation.status === "draft" && (
+              {consultation.status === "draft" && !isEditing && (
+                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar Nota
+                </Button>
+              )}
+              
+              {consultation.status === "draft" && !isEditing && (
                 <Button onClick={handleFinalize} disabled={finalizeMutation.isPending}>
                   {finalizeMutation.isPending ? (
                     <>
@@ -135,7 +196,20 @@ export default function ConsultationDetail() {
 
           <TabsContent value="soap" className="space-y-4">
             {consultation.soapNote ? (
-              <SOAPNoteViewer soapNote={consultation.soapNote} />
+              isEditing ? (
+                <SOAPNoteEditor
+                  soapNote={consultation.soapNote}
+                  onSave={(updatedNote) => {
+                    updateSOAPMutation.mutate({
+                      consultationId: consultationId!,
+                      soapNote: updatedNote,
+                    });
+                  }}
+                  onCancel={() => setIsEditing(false)}
+                />
+              ) : (
+                <SOAPNoteViewer soapNote={consultation.soapNote} />
+              )
             ) : (
               <Card>
                 <CardContent className="py-12 text-center">
