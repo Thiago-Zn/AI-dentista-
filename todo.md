@@ -161,3 +161,8 @@
 - [x] Implement click handlers on timestamps to seek audio to that position
 - [x] Add visual feedback when hovering over clickable timestamps
 - [x] Sync audio playback position with highlighted transcript segment
+
+
+## Critical Bugs
+
+- [x] Fix tRPC API returning HTML instead of JSON on dashboard page (resolved by server restart)
