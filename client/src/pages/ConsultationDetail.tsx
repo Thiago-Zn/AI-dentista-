@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SOAPNoteViewerV2 } from "@/components/SOAPNoteViewerV2";
 import { SOAPNoteEditor } from "@/components/SOAPNoteEditor";
-import { TranscriptionViewer } from "@/components/TranscriptionViewer";
+import { TranscriptionViewerWithAudio } from "@/components/TranscriptionViewerWithAudio";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ArrowLeft, FileText, AudioLines, Download, CheckCircle, Edit } from "lucide-react";
 import { useLocation, useParams } from "wouter";
@@ -226,7 +226,11 @@ export default function ConsultationDetail() {
           </TabsContent>
           <TabsContent value="transcript" className="space-y-4">
             {consultation.transcript ? (
-              <TranscriptionViewer transcript={consultation.transcript} />
+              <TranscriptionViewerWithAudio
+                transcript={consultation.transcript}
+                transcriptSegments={consultation.transcriptSegments as any}
+                audioUrl={consultation.audioUrl || undefined}
+              />
             ) : (
               <Card>
                 <CardContent className="py-12 text-center">

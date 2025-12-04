@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TranscriptionViewer } from "@/components/TranscriptionViewer";
+import { TranscriptionViewerWithAudio } from "@/components/TranscriptionViewerWithAudio";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ArrowLeft, Wand2, AlertCircle } from "lucide-react";
 import { useLocation, useParams } from "wouter";
@@ -146,27 +146,12 @@ export default function TranscriptionReview() {
           </AlertDescription>
         </Alert>
 
-        <TranscriptionViewer 
+        <TranscriptionViewerWithAudio
           transcript={currentTranscript}
-          onSave={handleSaveTranscript}
+          transcriptSegments={consultation.transcriptSegments as any}
+          audioUrl={consultation.audioUrl || undefined}
+          onTranscriptEdit={handleSaveTranscript}
         />
-
-        {consultation.audioUrl && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Áudio da Consulta</CardTitle>
-              <CardDescription>
-                Ouça o áudio original para verificar a transcrição
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <audio controls className="w-full">
-                <source src={consultation.audioUrl} type="audio/webm" />
-                Seu navegador não suporta o elemento de áudio.
-              </audio>
-            </CardContent>
-          </Card>
-        )}
 
         <div className="flex justify-end gap-3">
           <Button

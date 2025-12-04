@@ -152,3 +152,12 @@
 - [ ] Ensure consistent spacing and typography
 - [ ] Add subtle shadows and depth
 - [ ] Improve mobile responsiveness
+
+
+## Clickable Timestamps Feature
+
+- [x] Display timestamps from Whisper segments in each transcription speech bubble
+- [x] Add audio player component to transcription review page
+- [x] Implement click handlers on timestamps to seek audio to that position
+- [x] Add visual feedback when hovering over clickable timestamps
+- [x] Sync audio playback position with highlighted transcript segment
