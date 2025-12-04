@@ -91,3 +91,8 @@
 - [x] Add patient fields: phone, CPF, allergies
 - [x] Link consultations to patient records
 - [x] Add navigation to patients page in header
+
+
+## Bugs to Fix
+
+- [x] Fix React hooks ordering error in ConsultationDetail component (hooks called conditionally)

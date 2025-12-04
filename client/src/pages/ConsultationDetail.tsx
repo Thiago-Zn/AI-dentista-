@@ -25,6 +25,7 @@ export default function ConsultationDetail() {
 
   const utils = trpc.useUtils();
   
+  // All mutations must be declared at the top level, not conditionally
   const finalizeMutation = trpc.consultations.finalize.useMutation({
     onSuccess: () => {
       toast.success("Consulta finalizada com sucesso!");
@@ -43,6 +44,34 @@ export default function ConsultationDetail() {
     },
   });
 
+  const exportPDFMutation = trpc.consultations.exportPDF.useMutation({
+    onSuccess: (data) => {
+      // Convert base64 to blob and download
+      const byteCharacters = atob(data.pdfData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `consulta-${consultation?.patientName}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("PDF exportado com sucesso!");
+    },
+    onError: () => {
+      toast.error("Erro ao exportar PDF");
+    },
+  });
+
+  // Early returns after all hooks
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -82,33 +111,6 @@ export default function ConsultationDetail() {
       console.error(error);
     }
   };
-
-  const exportPDFMutation = trpc.consultations.exportPDF.useMutation({
-    onSuccess: (data) => {
-      // Convert base64 to blob and download
-      const byteCharacters = atob(data.pdfData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `consulta-${consultation?.patientName}-${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      toast.success("PDF exportado com sucesso!");
-    },
-    onError: () => {
-      toast.error("Erro ao exportar PDF");
-    },
-  });
 
   const handleExportPDF = () => {
     if (!consultationId) return;
