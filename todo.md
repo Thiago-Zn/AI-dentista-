@@ -96,3 +96,4 @@
 ## Bugs to Fix
 
 - [x] Fix React hooks ordering error in ConsultationDetail component (hooks called conditionally)
+- [x] Fix consultation ID not being properly stored after creation in NewConsultation page

@@ -73,9 +73,13 @@ export default function NewConsultation() {
         patientName: finalPatientName,
       });
       
-      setConsultationId(result.success ? Date.now() : null); // Use timestamp as temp ID
-      setStep("recording");
-      toast.success("Consulta criada. Inicie a gravação.");
+      if (result.success && result.consultationId) {
+        setConsultationId(result.consultationId);
+        setStep("recording");
+        toast.success("Consulta criada. Inicie a gravação.");
+      } else {
+        throw new Error("Failed to get consultation ID");
+      }
     } catch (error) {
       toast.error("Erro ao criar consulta");
       console.error(error);

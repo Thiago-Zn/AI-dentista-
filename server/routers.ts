@@ -95,14 +95,14 @@ export const appRouter = router({
         templateUsed: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        await createConsultation({
+        const result = await createConsultation({
           dentistId: ctx.user.id,
           patientId: input.patientId,
           patientName: input.patientName,
           templateUsed: input.templateUsed,
           status: "draft",
         });
-        return { success: true };
+        return { success: true, consultationId: result.id };
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {

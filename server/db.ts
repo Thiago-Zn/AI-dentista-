@@ -125,7 +125,8 @@ export async function createConsultation(consultation: InsertConsultation) {
   if (!db) throw new Error("Database not available");
   
   const result = await db.insert(consultations).values(consultation);
-  return result;
+  const insertId = Number(result[0].insertId);
+  return { id: insertId };
 }
 
 export async function getConsultationsByDentist(dentistId: number) {
