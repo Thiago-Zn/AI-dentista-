@@ -42,7 +42,8 @@ describe("consultations router", () => {
       templateUsed: "general",
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toMatchObject({ success: true });
+    expect(result.consultationId).toBeGreaterThan(0);
   });
 
   it("should list consultations for authenticated user", async () => {
