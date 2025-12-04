@@ -96,6 +96,7 @@ export type InsertConsultationTemplate = typeof consultationTemplates.$inferInse
  * SOAP Note structure for dental consultations
  */
 export interface SOAPNote {
+  urgency?: "high" | "medium" | "low";
   subjective: {
     queixa_principal: string;
     historia_doenca_atual: string;

@@ -3,7 +3,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SOAPNoteViewer } from "@/components/SOAPNoteViewer";
+import { SOAPNoteViewerV2 } from "@/components/SOAPNoteViewerV2";
 import { SOAPNoteEditor } from "@/components/SOAPNoteEditor";
 import { TranscriptionViewer } from "@/components/TranscriptionViewer";
 import { trpc } from "@/lib/trpc";
@@ -211,7 +211,7 @@ export default function ConsultationDetail() {
                   onCancel={() => setIsEditing(false)}
                 />
               ) : (
-                <SOAPNoteViewer soapNote={consultation.soapNote} />
+                <SOAPNoteViewerV2 soapNote={consultation.soapNote} />
               )
             ) : (
               <Card>

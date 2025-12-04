@@ -42,14 +42,22 @@ export const appRouter = router({
       .input(z.object({
         name: z.string(),
         birthDate: z.string().optional(),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        cpf: z.string().optional(),
         medicalHistory: z.string().optional(),
+        allergies: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         await createPatient({
           dentistId: ctx.user.id,
           name: input.name,
           birthDate: input.birthDate,
+          phone: input.phone,
+          email: input.email,
+          cpf: input.cpf,
           medicalHistory: input.medicalHistory,
+          allergies: input.allergies,
         });
         return { success: true };
       }),

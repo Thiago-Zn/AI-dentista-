@@ -112,3 +112,43 @@
 - [x] Store Whisper API segment data with timestamps in database
 - [ ] Add timestamp display in transcription speech bubbles
 - [ ] Enable audio playback with sync to transcript timestamps
+
+
+## UI/UX Overhaul
+
+### Multiple Input Methods
+- [x] Add input method selector (Gravação ao Vivo, Upload de Áudio, Texto Digitado)
+- [x] Implement text input mode with textarea for direct transcription
+- [x] Implement audio file upload with drag-and-drop
+- [x] Support multiple audio formats (mp3, wav, m4a, webm)
+
+### Recording Interface Improvements
+- [x] Add elegant waveform animation during recording
+- [x] Improve visual feedback with pulsing record button
+- [x] Add smooth transitions between recording states
+- [x] Standardize colors across recording UI
+
+### Loading States & Animations
+- [x] Add skeleton loaders during transcription processing
+- [x] Create animated progress indicator for AI analysis
+- [x] Add smooth fade transitions between steps
+- [x] Implement success animations after completion
+
+### SOAP Report Layout
+- [x] Redesign SOAP note display with better typography
+- [x] Add visual hierarchy with section headers
+- [x] Improve spacing and readability
+- [ ] Add print-friendly styling
+
+### Patient Management Redesign
+- [x] Add patient avatar/photo support
+- [x] Redesign patient list with modern card layout
+- [x] Improve patient search with instant filtering
+- [x] Add visual indicators for patient status
+- [ ] Better organize patient detail page with tabs
+
+### Overall Design Polish
+- [ ] Standardize color palette across all pages
+- [ ] Ensure consistent spacing and typography
+- [ ] Add subtle shadows and depth
+- [ ] Improve mobile responsiveness
