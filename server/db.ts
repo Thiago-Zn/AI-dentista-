@@ -1,11 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, patients, InsertPatient, consultations, InsertConsultation, consultationTemplates, InsertConsultationTemplate } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -35,7 +34,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "loginMethod", "croNumber"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -89,4 +88,95 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Patient management functions
+export async function createPatient(patient: InsertPatient) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(patients).values(patient);
+  return result;
+}
+
+export async function getPatientsByDentist(dentistId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.select().from(patients).where(eq(patients.dentistId, dentistId)).orderBy(desc(patients.createdAt));
+}
+
+export async function getPatientById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(patients).where(eq(patients.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updatePatient(id: number, data: Partial<InsertPatient>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.update(patients).set(data).where(eq(patients.id, id));
+}
+
+// Consultation management functions
+export async function createConsultation(consultation: InsertConsultation) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(consultations).values(consultation);
+  return result;
+}
+
+export async function getConsultationsByDentist(dentistId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.select().from(consultations).where(eq(consultations.dentistId, dentistId)).orderBy(desc(consultations.createdAt));
+}
+
+export async function getConsultationById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(consultations).where(eq(consultations.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateConsultation(id: number, data: Partial<InsertConsultation>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.update(consultations).set(data).where(eq(consultations.id, id));
+}
+
+export async function getConsultationsByPatient(patientId: number, dentistId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.select().from(consultations)
+    .where(and(eq(consultations.patientId, patientId), eq(consultations.dentistId, dentistId)))
+    .orderBy(desc(consultations.createdAt));
+}
+
+// Template management functions
+export async function getDefaultTemplates() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.select().from(consultationTemplates).where(eq(consultationTemplates.isDefault, true));
+}
+
+export async function getTemplatesByDentist(dentistId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.select().from(consultationTemplates).where(eq(consultationTemplates.dentistId, dentistId));
+}
+
+export async function createTemplate(template: InsertConsultationTemplate) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.insert(consultationTemplates).values(template);
+}
