@@ -58,6 +58,36 @@ export default function NewConsultationV2() {
     }
   };
 
+  const uploadAudioFile = async (consultationId: number, audioBlob: Blob, durationSeconds: number) => {
+    // Upload via multipart endpoint (bypasses JSON body parser)
+    const formData = new FormData();
+    formData.append("audio", audioBlob);
+    formData.append("consultationId", consultationId.toString());
+
+    const response = await fetch("/api/upload/audio", {
+      method: "POST",
+      body: formData,
+      credentials: "include", // Include session cookie
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Erro ao fazer upload do áudio");
+    }
+
+    const { fileKey, audioUrl, mimeType, sizeBytes } = await response.json();
+
+    // Save metadata to database via tRPC
+    await uploadAudioMutation.mutateAsync({
+      consultationId,
+      fileKey,
+      audioUrl,
+      mimeType,
+      durationSeconds,
+      sizeBytes,
+    });
+  };
+
   const handleRecordingComplete = async (audioBlob: Blob, durationSeconds: number) => {
     if (!selectedPatientId || !selectedPatientName) {
       toast.error("Selecione um paciente");
@@ -74,37 +104,24 @@ export default function NewConsultationV2() {
       });
       setConsultationId(newId);
 
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        // Upload audio
-        await uploadAudioMutation.mutateAsync({
-          consultationId: newId,
-          audioData: base64Audio,
-          mimeType: audioBlob.type,
-          durationSeconds,
-        });
+      // Upload audio via multipart endpoint
+      await uploadAudioFile(newId, audioBlob, durationSeconds);
 
-        setProcessingStep("transcribing");
-        toast.success("Áudio enviado. Transcrevendo...");
+      setProcessingStep("transcribing");
+      toast.success("Áudio enviado. Transcrevendo...");
 
-        // Transcribe
-        await transcribeMutation.mutateAsync({
-          consultationId: newId,
-        });
+      // Transcribe
+      await transcribeMutation.mutateAsync({
+        consultationId: newId,
+      });
 
-        setProcessingStep("complete");
-        toast.success("Transcrição concluída! Revise antes de continuar.");
-        
-        // Redirect to review page
-        setLocation(`/consultation/${newId}/review`);
-      };
-    } catch (error) {
-      toast.error("Erro ao processar consulta");
+      setProcessingStep("complete");
+      toast.success("Transcrição concluída! Revise antes de continuar.");
+
+      // Redirect to review page
+      setLocation(`/consultation/${newId}/review`);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao processar consulta");
       console.error(error);
       setProcessingStep("idle");
     }
@@ -146,37 +163,24 @@ export default function NewConsultationV2() {
       });
       setConsultationId(newId);
 
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(audioFile);
-      
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        // Upload audio
-        await uploadAudioMutation.mutateAsync({
-          consultationId: newId,
-          audioData: base64Audio,
-          mimeType: audioFile.type,
-          durationSeconds: 0, // We don't know duration from file
-        });
+      // Upload audio via multipart endpoint
+      await uploadAudioFile(newId, audioFile, 0); // Duration unknown for uploaded files
 
-        setProcessingStep("transcribing");
-        toast.success("Áudio enviado. Transcrevendo...");
+      setProcessingStep("transcribing");
+      toast.success("Áudio enviado. Transcrevendo...");
 
-        // Transcribe
-        await transcribeMutation.mutateAsync({
-          consultationId: newId,
-        });
+      // Transcribe
+      await transcribeMutation.mutateAsync({
+        consultationId: newId,
+      });
 
-        setProcessingStep("complete");
-        toast.success("Transcrição concluída! Revise antes de continuar.");
-        
-        // Redirect to review page
-        setLocation(`/consultation/${newId}/review`);
-      };
-    } catch (error) {
-      toast.error("Erro ao processar arquivo");
+      setProcessingStep("complete");
+      toast.success("Transcrição concluída! Revise antes de continuar.");
+
+      // Redirect to review page
+      setLocation(`/consultation/${newId}/review`);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao processar arquivo");
       console.error(error);
       setProcessingStep("idle");
     }

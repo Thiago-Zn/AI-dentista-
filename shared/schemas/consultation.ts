@@ -38,23 +38,20 @@ export const createConsultationSchema = z.object({
 });
 
 /**
- * Upload audio schema with strict size and duration limits
+ * Upload audio metadata schema (file is uploaded via multipart endpoint)
  */
 export const uploadAudioSchema = z.object({
   consultationId: z.number().int().positive(),
 
-  audioData: z
+  fileKey: z
     .string()
-    .min(100, "Áudio muito pequeno")
-    .max(MAX_BASE64_SIZE, `Áudio muito grande (máx ${MAX_AUDIO_SIZE_MB}MB)`)
-    .refine(
-      (base64) => {
-        // Validate base64 format
-        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-        return base64Regex.test(base64);
-      },
-      { message: "Formato de áudio inválido (base64 corrompido)" }
-    ),
+    .min(10, "File key inválida")
+    .max(500, "File key muito longa"),
+
+  audioUrl: z
+    .string()
+    .url("URL de áudio inválida")
+    .max(2000, "URL muito longa"),
 
   mimeType: z.enum(ALLOWED_AUDIO_TYPES, {
     errorMap: () => ({
@@ -69,6 +66,12 @@ export const uploadAudioSchema = z.object({
       MAX_AUDIO_DURATION_SECONDS,
       `Áudio muito longo (máx ${MAX_AUDIO_DURATION_MINUTES} minutos)`
     ),
+
+  sizeBytes: z
+    .number()
+    .int()
+    .positive("Tamanho de arquivo inválido")
+    .max(MAX_AUDIO_SIZE_BYTES, `Arquivo muito grande (máx ${MAX_AUDIO_SIZE_MB}MB)`),
 });
 
 /**

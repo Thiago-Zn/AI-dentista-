@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { rateLimitMiddleware, RATE_LIMITS } from "./_core/rateLimit";
 import {
   createPatient,
   getPatientsByDentist,
@@ -133,21 +134,15 @@ export const appRouter = router({
           throw new Error("Consultation not found or access denied");
         }
 
-        // Convert base64 to buffer
-        const audioBuffer = Buffer.from(input.audioData, 'base64');
-        
-        // Upload to S3
-        const fileKey = `consultations/${ctx.user.id}/${input.consultationId}/audio-${nanoid()}.webm`;
-        const { url } = await storagePut(fileKey, audioBuffer, input.mimeType);
-
-        // Update consultation with audio URL
+        // Audio file already uploaded via multipart endpoint
+        // Just save metadata to database
         await updateConsultation(input.consultationId, {
-          audioUrl: url,
-          audioFileKey: fileKey,
+          audioUrl: input.audioUrl,
+          audioFileKey: input.fileKey,
           audioDurationSeconds: input.durationSeconds,
         });
 
-        return { success: true, audioUrl: url };
+        return { success: true, audioUrl: input.audioUrl };
       }),
 
     updateTranscript: protectedProcedure
@@ -166,6 +161,7 @@ export const appRouter = router({
       }),
 
     transcribe: protectedProcedure
+      .use(rateLimitMiddleware("transcribe", RATE_LIMITS.transcribe))
       .input(transcribeAudioSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
@@ -198,6 +194,7 @@ export const appRouter = router({
       }),
 
     analyzeAndGenerateSOAP: protectedProcedure
+      .use(rateLimitMiddleware("analyzeSOAP", RATE_LIMITS.analyzeSOAP))
       .input(analyzeAndGenerateSOAPSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
