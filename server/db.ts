@@ -5,17 +5,56 @@ import { ENV } from './_core/env';
 import { encryptField, decryptField, PATIENT_ENCRYPTED_FIELDS, CONSULTATION_ENCRYPTED_FIELDS } from './_core/encryption';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _dbInitializationFailed = false;
 
+/**
+ * Get database instance with fail-fast behavior
+ * Throws error if DATABASE_URL is missing or connection fails
+ * This prevents the app from silently continuing with broken DB
+ */
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+  // If initialization already failed, throw immediately
+  if (_dbInitializationFailed) {
+    throw new Error(
+      "[Database] Database initialization failed previously. Cannot proceed without database connection."
+    );
   }
-  return _db;
+
+  // If already initialized, return it
+  if (_db) {
+    return _db;
+  }
+
+  // DATABASE_URL is required
+  if (!process.env.DATABASE_URL) {
+    _dbInitializationFailed = true;
+    const error = new Error(
+      "[Database] FATAL: DATABASE_URL environment variable is not set. Application cannot start without database."
+    );
+    console.error(error.message);
+    throw error;
+  }
+
+  // Try to initialize connection
+  try {
+    _db = drizzle(process.env.DATABASE_URL);
+    console.log("[Database] Connection established successfully");
+    return _db;
+  } catch (error) {
+    _dbInitializationFailed = true;
+    const enhancedError = new Error(
+      `[Database] FATAL: Failed to connect to database. Application cannot start. Original error: ${error instanceof Error ? error.message : String(error)}`
+    );
+    console.error(enhancedError.message);
+
+    // In production, we want to crash the process so orchestration tools (Docker, K8s) can restart
+    if (process.env.NODE_ENV === "production") {
+      console.error("[Database] Exiting process due to database connection failure in production");
+      process.exit(1);
+    }
+
+    throw enhancedError;
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -23,11 +62,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     throw new Error("User openId is required for upsert");
   }
 
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  const db = await getDb(); // Will throw if DB unavailable
 
   try {
     const values: InsertUser = {
@@ -78,110 +113,71 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  const db = await getDb(); // Will throw if DB unavailable
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
 
 // Patient management functions
 export async function createPatient(patient: InsertPatient) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Encrypt sensitive fields before storing
+  const db = await getDb(); // Will throw if DB unavailable
   const encryptedPatient = encryptPatientData(patient);
-
   const result = await db.insert(patients).values(encryptedPatient);
   return result;
 }
 
 export async function getPatientsByDentist(dentistId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
+  const db = await getDb(); // Will throw if DB unavailable
   const encryptedPatients = await db.select().from(patients)
     .where(eq(patients.dentistId, dentistId))
     .orderBy(desc(patients.createdAt));
-
-  // Decrypt sensitive fields before returning
   return encryptedPatients.map(decryptPatientData);
 }
 
 export async function getPatientById(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
+  const db = await getDb(); // Will throw if DB unavailable
   const result = await db.select().from(patients).where(eq(patients.id, id)).limit(1);
-
   if (result.length === 0) return undefined;
-
-  // Decrypt sensitive fields before returning
   return decryptPatientData(result[0]);
 }
 
 export async function updatePatient(id: number, data: Partial<InsertPatient>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Encrypt sensitive fields before updating
+  const db = await getDb(); // Will throw if DB unavailable
   const encryptedData = encryptPatientData(data as InsertPatient);
-
   return await db.update(patients).set(encryptedData).where(eq(patients.id, id));
 }
 
 // Consultation management functions
 export async function createConsultation(consultation: InsertConsultation) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
+  const db = await getDb(); // Will throw if DB unavailable
   const result = await db.insert(consultations).values(consultation);
   const insertId = Number(result[0].insertId);
   return { id: insertId };
 }
 
 export async function getConsultationsByDentist(dentistId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
+  const db = await getDb(); // Will throw if DB unavailable
   const encryptedConsultations = await db.select().from(consultations)
     .where(eq(consultations.dentistId, dentistId))
     .orderBy(desc(consultations.createdAt));
-
-  // Decrypt sensitive fields before returning
   return encryptedConsultations.map(decryptConsultationData);
 }
 
 export async function getConsultationById(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
+  const db = await getDb(); // Will throw if DB unavailable
   const result = await db.select().from(consultations).where(eq(consultations.id, id)).limit(1);
-
   if (result.length === 0) return undefined;
-
-  // Decrypt sensitive fields before returning
   return decryptConsultationData(result[0]);
 }
 
 export async function updateConsultation(id: number, data: Partial<InsertConsultation>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Encrypt sensitive fields before updating
+  const db = await getDb(); // Will throw if DB unavailable
   const encryptedData = encryptConsultationData(data);
-
   return await db.update(consultations).set(encryptedData).where(eq(consultations.id, id));
 }
 
 export async function getConsultationsByPatient(patientId: number, dentistId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   const encryptedConsultations = await db.select().from(consultations)
     .where(and(eq(consultations.patientId, patientId), eq(consultations.dentistId, dentistId)))
@@ -193,22 +189,19 @@ export async function getConsultationsByPatient(patientId: number, dentistId: nu
 
 // Template management functions
 export async function getDefaultTemplates() {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
   
   return await db.select().from(consultationTemplates).where(eq(consultationTemplates.isDefault, true));
 }
 
 export async function getTemplatesByDentist(dentistId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
   
   return await db.select().from(consultationTemplates).where(eq(consultationTemplates.dentistId, dentistId));
 }
 
 export async function createTemplate(template: InsertConsultationTemplate) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   return await db.insert(consultationTemplates).values(template);
 }
@@ -240,8 +233,7 @@ export async function createAuditLog(log: InsertAuditLog) {
  * Get audit logs for a specific patient
  */
 export async function getAuditLogsByPatient(patientId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   return await db.select().from(auditLogs)
     .where(eq(auditLogs.patientId, patientId))
@@ -252,8 +244,7 @@ export async function getAuditLogsByPatient(patientId: number) {
  * Get audit logs for a specific user (dentist)
  */
 export async function getAuditLogsByUser(userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   return await db.select().from(auditLogs)
     .where(eq(auditLogs.userId, userId))
@@ -264,8 +255,7 @@ export async function getAuditLogsByUser(userId: number) {
  * Create or update a patient consent
  */
 export async function upsertConsent(consent: InsertPatientConsent) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   return await db.insert(patientConsents).values(consent);
 }
@@ -274,8 +264,7 @@ export async function upsertConsent(consent: InsertPatientConsent) {
  * Get all consents for a patient
  */
 export async function getConsentsByPatient(patientId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   return await db.select().from(patientConsents)
     .where(eq(patientConsents.patientId, patientId))
@@ -290,8 +279,7 @@ export async function hasConsent(
   patientId: number,
   consentType: 'data_processing' | 'sensitive_health_data' | 'audio_recording' | 'ai_processing'
 ): Promise<boolean> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   const consents = await db.select().from(patientConsents)
     .where(
@@ -315,8 +303,7 @@ export async function hasConsent(
  * Revoke a consent
  */
 export async function revokeConsent(consentId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); // Will throw if DB unavailable
 
   return await db.update(patientConsents)
     .set({
