@@ -93,6 +93,89 @@ export type ConsultationTemplate = typeof consultationTemplates.$inferSelect;
 export type InsertConsultationTemplate = typeof consultationTemplates.$inferInsert;
 
 /**
+ * Patient consents table - LGPD compliance
+ * Stores explicit consent records for data processing
+ */
+export const patientConsents = mysqlTable("patientConsents", {
+  id: int("id").autoincrement().primaryKey(),
+  patientId: int("patientId").notNull(),
+  dentistId: int("dentistId").notNull(),
+
+  // Type of consent given
+  consentType: mysqlEnum("consentType", [
+    "data_processing",      // General data processing consent (LGPD Art. 7)
+    "sensitive_health_data", // Explicit consent for health data (LGPD Art. 11)
+    "audio_recording",       // Consent to record consultations
+    "ai_processing"          // Consent for AI analysis of health data
+  ]).notNull(),
+
+  // Consent details
+  granted: boolean("granted").notNull().default(false),
+  termsVersion: varchar("termsVersion", { length: 50 }).notNull(), // e.g., "1.0", "2023-12-05"
+  ipAddress: varchar("ipAddress", { length: 45 }), // IPv4 or IPv6
+  userAgent: text("userAgent"),
+
+  // Timestamps for audit trail
+  grantedAt: timestamp("grantedAt"),
+  revokedAt: timestamp("revokedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PatientConsent = typeof patientConsents.$inferSelect;
+export type InsertPatientConsent = typeof patientConsents.$inferInsert;
+
+/**
+ * Audit logs table - LGPD compliance
+ * Records all access and modifications to patient data
+ */
+export const auditLogs = mysqlTable("auditLogs", {
+  id: int("id").autoincrement().primaryKey(),
+
+  // Who performed the action
+  userId: int("userId").notNull(), // dentist ID
+  userEmail: varchar("userEmail", { length: 320 }),
+  userName: varchar("userName", { length: 255 }),
+
+  // What was accessed/modified
+  action: mysqlEnum("action", [
+    "patient_created",
+    "patient_viewed",
+    "patient_updated",
+    "patient_deleted",
+    "consultation_created",
+    "consultation_viewed",
+    "consultation_updated",
+    "consultation_deleted",
+    "consultation_exported_pdf",
+    "audio_uploaded",
+    "audio_transcribed",
+    "soap_generated",
+    "soap_updated",
+    "consent_granted",
+    "consent_revoked"
+  ]).notNull(),
+
+  // Related entities
+  patientId: int("patientId"), // null if action doesn't involve a patient
+  consultationId: int("consultationId"), // null if action doesn't involve a consultation
+
+  // Request metadata for forensics
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  requestPath: varchar("requestPath", { length: 500 }),
+
+  // Additional context (JSON)
+  metadata: json("metadata"), // e.g., { "fields_changed": ["name", "cpf"], "old_values": {...} }
+
+  // Timestamp
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+/**
  * SOAP Note structure for dental consultations
  */
 export interface SOAPNote {

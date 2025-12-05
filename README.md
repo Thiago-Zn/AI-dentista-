@@ -36,8 +36,7 @@ DentScribe AI é uma aplicação web completa que revoluciona a documentação d
 ### 🔒 Segurança e Privacidade
 - Autenticação OAuth integrada
 - Controle de acesso por usuário
-- Dados criptografados em trânsito e em repouso
-- Conformidade com LGPD
+- Comunicação via HTTPS (dados criptografados em trânsito)
 
 ---
 
@@ -126,7 +125,25 @@ VITE_APP_TITLE=DentScribe AI
 VITE_APP_LOGO=/logo.png
 OWNER_OPEN_ID=seu-open-id
 OWNER_NAME=Seu Nome
+
+# =============================================================================
+# CRIPTOGRAFIA DE DADOS SENSÍVEIS (OBRIGATÓRIO PARA SEGURANÇA)
+# =============================================================================
+# Chave de criptografia AES-256 (32 bytes = 64 caracteres hexadecimais)
+# CRÍTICO: Nunca commite esta chave no Git!
+# CRÍTICO: Perder esta chave = perder TODOS os dados criptografados!
+#
+# Gere uma chave única com:
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+ENCRYPTION_KEY=sua-chave-de-64-caracteres-hex-aqui
 ```
+
+**⚠️ IMPORTANTE - ENCRYPTION_KEY**:
+- Esta chave é **OBRIGATÓRIA** para criptografar dados sensíveis de pacientes
+- Cada ambiente (dev, staging, produção) deve ter chaves diferentes
+- **Faça backup seguro** da chave (perder = perder dados)
+- **Nunca** compartilhe ou commite no Git
+- Em produção, use secrets manager (AWS Secrets Manager, Azure Key Vault, etc.)
 
 ### Instalação
 
@@ -232,22 +249,48 @@ O DentScribe AI foi projetado com foco em usabilidade e eficiência para profiss
 
 ---
 
+## ⚠️ **AVISO IMPORTANTE - LIMITAÇÕES DO MVP**
+
+**🔴 ESTE SISTEMA É UM MVP (MINIMUM VIABLE PRODUCT) E NÃO DEVE SER USADO COM DADOS REAIS DE PACIENTES EM AMBIENTE DE PRODUÇÃO.**
+
+### Limitações Atuais de Segurança e LGPD
+
+❌ **Dados sensíveis NÃO estão criptografados em repouso** (CPF, histórico médico, alergias, transcrições de consultas)
+❌ **Não há coleta de consentimento explícito** dos pacientes para processamento de dados de saúde
+❌ **Não há auditoria de acesso** a dados de pacientes
+❌ **Não há mecanismos de portabilidade** (exportar dados do paciente)
+❌ **Não há mecanismos completos de exclusão** (direito ao esquecimento - LGPD Art. 18)
+
+### Uso Recomendado
+
+✅ **Demonstrações** com dados fictícios
+✅ **Desenvolvimento e testes** em ambiente controlado
+✅ **Avaliação de viabilidade** técnica e clínica
+
+❌ **NÃO usar** com dados reais de pacientes sem implementar todas as proteções legais obrigatórias
+❌ **NÃO usar** em ambientes de produção sem consultoria jurídica especializada em LGPD
+
+---
+
 ## 🔐 Segurança
 
 ### Medidas Implementadas
 
 - **Autenticação OAuth**: Login seguro via Manus
 - **Autorização por Usuário**: Cada dentista acessa apenas seus próprios dados
-- **HTTPS Obrigatório**: Todas as comunicações criptografadas
+- **HTTPS Obrigatório**: Todas as comunicações criptografadas em trânsito
 - **Validação de Entrada**: Proteção contra injeção de SQL e XSS
 - **Armazenamento Seguro**: Arquivos de áudio em S3 com URLs não enumeráveis
 
-### Conformidade LGPD
+### Próximas Implementações de Segurança (Roadmap)
 
-- Dados pessoais armazenados com consentimento
-- Possibilidade de exclusão de dados (direito ao esquecimento)
-- Logs de acesso para auditoria
-- Criptografia de dados sensíveis
+- [ ] Criptografia de dados sensíveis em repouso (AES-256-GCM)
+- [ ] Sistema de consentimento explícito para LGPD
+- [ ] Auditoria completa de acesso a dados de pacientes
+- [ ] Mecanismos de portabilidade de dados
+- [ ] Mecanismos de exclusão completa (direito ao esquecimento)
+- [ ] Rate limiting para proteção de APIs de IA
+- [ ] Validação completa de schemas (substituir `z.any()` por Zod schemas reais)
 
 ---
 
