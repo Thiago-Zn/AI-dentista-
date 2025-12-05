@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { uploadAudioMulter, handleAudioUpload } from "./uploadHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -30,11 +31,28 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // Reduce JSON body parser limit (audio now uses multipart upload)
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ limit: "2mb", extended: true }));
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // Multipart audio upload endpoint (bypasses JSON parser)
+  app.post(
+    "/api/upload/audio",
+    (req, res, next) => {
+      // Use createContext to set user on request
+      createContext({ req, res }).then((ctx) => {
+        (req as any).user = ctx.user;
+        next();
+      }).catch(next);
+    },
+    uploadAudioMulter,
+    handleAudioUpload
+  );
+
   // tRPC API
   app.use(
     "/api/trpc",

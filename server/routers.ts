@@ -3,9 +3,11 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { 
-  createPatient, 
-  getPatientsByDentist, 
+import { rateLimitMiddleware, RATE_LIMITS } from "./_core/rateLimit";
+import { ServiceError, ErrorCode, wrapServiceCall } from "./_core/errors";
+import {
+  createPatient,
+  getPatientsByDentist,
   getPatientById,
   updatePatient,
   createConsultation,
@@ -24,6 +26,21 @@ import { SOAPNote } from "../drizzle/schema";
 import { nanoid } from "nanoid";
 import { generateConsultationPDF } from "./pdfGenerator";
 
+// Import strict validation schemas
+import { createPatientSchema, updatePatientSchema, getPatientByIdSchema } from "../shared/schemas/patient";
+import {
+  createConsultationSchema,
+  uploadAudioSchema,
+  updateTranscriptSchema,
+  transcribeAudioSchema,
+  analyzeAndGenerateSOAPSchema,
+  updateSOAPSchema,
+  finalizeConsultationSchema,
+  exportPDFSchema,
+  getConsultationByIdSchema,
+  getConsultationsByPatientSchema,
+} from "../shared/schemas/consultation";
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -39,25 +56,11 @@ export const appRouter = router({
 
   patients: router({
     create: protectedProcedure
-      .input(z.object({
-        name: z.string(),
-        birthDate: z.string().optional(),
-        phone: z.string().optional(),
-        email: z.string().optional(),
-        cpf: z.string().optional(),
-        medicalHistory: z.string().optional(),
-        allergies: z.string().optional(),
-      }))
+      .input(createPatientSchema)
       .mutation(async ({ ctx, input }) => {
         await createPatient({
           dentistId: ctx.user.id,
-          name: input.name,
-          birthDate: input.birthDate,
-          phone: input.phone,
-          email: input.email,
-          cpf: input.cpf,
-          medicalHistory: input.medicalHistory,
-          allergies: input.allergies,
+          ...input,
         });
         return { success: true };
       }),
@@ -67,7 +70,7 @@ export const appRouter = router({
     }),
 
     getById: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(getPatientByIdSchema)
       .query(async ({ ctx, input }) => {
         const patient = await getPatientById(input.id);
         if (!patient || patient.dentistId !== ctx.user.id) {
@@ -77,18 +80,13 @@ export const appRouter = router({
       }),
 
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        birthDate: z.string().optional(),
-        medicalHistory: z.string().optional(),
-      }))
+      .input(updatePatientSchema)
       .mutation(async ({ ctx, input }) => {
         const patient = await getPatientById(input.id);
         if (!patient || patient.dentistId !== ctx.user.id) {
           throw new Error("Patient not found or access denied");
         }
-        
+
         const { id, ...updateData } = input;
         await updatePatient(id, updateData);
         return { success: true };
@@ -97,11 +95,7 @@ export const appRouter = router({
 
   consultations: router({
     create: protectedProcedure
-      .input(z.object({
-        patientId: z.number(),
-        patientName: z.string(),
-        templateUsed: z.string().optional(),
-      }))
+      .input(createConsultationSchema)
       .mutation(async ({ ctx, input }) => {
         const result = await createConsultation({
           dentistId: ctx.user.id,
@@ -118,7 +112,7 @@ export const appRouter = router({
     }),
 
     getById: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(getConsultationByIdSchema)
       .query(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.id);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -128,46 +122,32 @@ export const appRouter = router({
       }),
 
     getByPatient: protectedProcedure
-      .input(z.object({ patientId: z.number() }))
+      .input(getConsultationsByPatientSchema)
       .query(async ({ ctx, input }) => {
         return await getConsultationsByPatient(input.patientId, ctx.user.id);
       }),
 
     uploadAudio: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-        audioData: z.string(), // base64 encoded audio
-        mimeType: z.string(),
-        durationSeconds: z.number(),
-      }))
+      .input(uploadAudioSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
           throw new Error("Consultation not found or access denied");
         }
 
-        // Convert base64 to buffer
-        const audioBuffer = Buffer.from(input.audioData, 'base64');
-        
-        // Upload to S3
-        const fileKey = `consultations/${ctx.user.id}/${input.consultationId}/audio-${nanoid()}.webm`;
-        const { url } = await storagePut(fileKey, audioBuffer, input.mimeType);
-
-        // Update consultation with audio URL
+        // Audio file already uploaded via multipart endpoint
+        // Just save metadata to database
         await updateConsultation(input.consultationId, {
-          audioUrl: url,
-          audioFileKey: fileKey,
+          audioUrl: input.audioUrl,
+          audioFileKey: input.fileKey,
           audioDurationSeconds: input.durationSeconds,
         });
 
-        return { success: true, audioUrl: url };
+        return { success: true, audioUrl: input.audioUrl };
       }),
 
     updateTranscript: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-        transcript: z.string(),
-      }))
+      .input(updateTranscriptSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -182,9 +162,8 @@ export const appRouter = router({
       }),
 
     transcribe: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .use(rateLimitMiddleware("transcribe", RATE_LIMITS.transcribe))
+      .input(transcribeAudioSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -195,30 +174,56 @@ export const appRouter = router({
           throw new Error("No audio file found for this consultation");
         }
 
-        // Transcribe audio using Whisper with speaker identification
-        const result = await transcribeAudio({
-          audioUrl: consultation.audioUrl,
-          language: "pt",
-          prompt: "Consulta odontológica entre dentista e paciente. IMPORTANTE: Identifique e marque claramente cada falante usando 'Dentista:' ou 'Paciente:' no início de cada fala. Termos técnicos: cárie, gengivite, canal, restauração, periodontia, dente, molar, incisivo, prótese, implante.",
-        });
+        try {
+          // Transcribe audio using Whisper with speaker identification
+          const result = await wrapServiceCall(
+            "Whisper API",
+            ErrorCode.TRANSCRIPTION_FAILED,
+            "Falha ao transcrever áudio. Tente novamente em alguns minutos.",
+            async () => {
+              return await transcribeAudio({
+                audioUrl: consultation.audioUrl!,
+                language: "pt",
+                prompt: "Consulta odontológica entre dentista e paciente. IMPORTANTE: Identifique e marque claramente cada falante usando 'Dentista:' ou 'Paciente:' no início de cada fala. Termos técnicos: cárie, gengivite, canal, restauração, periodontia, dente, molar, incisivo, prótese, implante.",
+              });
+            }
+          );
 
-        if ('error' in result) {
-          throw new Error(result.error);
+          if ('error' in result) {
+            throw new ServiceError(
+              ErrorCode.TRANSCRIPTION_FAILED,
+              `Erro na transcrição: ${result.error}`,
+              { consultationId: input.consultationId }
+            );
+          }
+
+          // Update consultation with transcript and segments
+          // If this fails, we want to know - don't catch DB errors here
+          await updateConsultation(input.consultationId, {
+            transcript: result.text,
+            transcriptSegments: result.segments || [],
+          });
+
+          return { success: true, transcript: result.text, segments: result.segments };
+        } catch (error) {
+          // If it's already a ServiceError, rethrow it
+          if (error instanceof ServiceError) {
+            throw error;
+          }
+
+          // Otherwise, wrap it
+          throw new ServiceError(
+            ErrorCode.TRANSCRIPTION_FAILED,
+            "Erro inesperado ao processar transcrição",
+            { consultationId: input.consultationId },
+            error instanceof Error ? error : undefined
+          );
         }
-
-        // Update consultation with transcript and segments (with timestamps)
-        await updateConsultation(input.consultationId, {
-          transcript: result.text,
-          transcriptSegments: result.segments || [],
-        });
-
-        return { success: true, transcript: result.text, segments: result.segments };
       }),
 
     analyzeAndGenerateSOAP: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .use(rateLimitMiddleware("analyzeSOAP", RATE_LIMITS.analyzeSOAP))
+      .input(analyzeAndGenerateSOAPSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -294,108 +299,142 @@ FORMATO DE SAÍDA (JSON):
 
 Seja preciso, conciso e use terminologia clínica apropriada.`;
 
-        // Call LLM for analysis
-        const response = await invokeLLM({
-          messages: [
-            { role: "system", content: "Você é um assistente especializado em documentação odontológica brasileira." },
-            { role: "user", content: prompt }
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "soap_note",
-              strict: true,
-              schema: {
-                type: "object",
-                properties: {
-                  subjective: {
-                    type: "object",
-                    properties: {
-                      queixa_principal: { type: "string" },
-                      historia_doenca_atual: { type: "string" },
-                      historico_medico: { type: "array", items: { type: "string" } },
-                      medicacoes: {
-                        type: "array",
-                        items: {
+        try {
+          // Call LLM for analysis with error handling
+          const response = await wrapServiceCall(
+            "GPT-4 LLM",
+            ErrorCode.LLM_RESPONSE_FAILED,
+            "Falha ao gerar análise SOAP. Tente novamente em alguns minutos.",
+            async () => {
+              return await invokeLLM({
+                messages: [
+                  { role: "system", content: "Você é um assistente especializado em documentação odontológica brasileira." },
+                  { role: "user", content: prompt }
+                ],
+                response_format: {
+                  type: "json_schema",
+                  json_schema: {
+                    name: "soap_note",
+                    strict: true,
+                    schema: {
+                      type: "object",
+                      properties: {
+                        subjective: {
                           type: "object",
                           properties: {
-                            nome: { type: "string" },
-                            dose: { type: "string" },
-                            frequencia: { type: "string" }
+                            queixa_principal: { type: "string" },
+                            historia_doenca_atual: { type: "string" },
+                            historico_medico: { type: "array", items: { type: "string" } },
+                            medicacoes: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  nome: { type: "string" },
+                                  dose: { type: "string" },
+                                  frequencia: { type: "string" }
+                                },
+                                required: ["nome", "dose", "frequencia"],
+                                additionalProperties: false
+                              }
+                            }
                           },
-                          required: ["nome", "dose", "frequencia"],
+                          required: ["queixa_principal", "historia_doenca_atual", "historico_medico", "medicacoes"],
                           additionalProperties: false
-                        }
-                      }
-                    },
-                    required: ["queixa_principal", "historia_doenca_atual", "historico_medico", "medicacoes"],
-                    additionalProperties: false
-                  },
-                  objective: {
-                    type: "object",
-                    properties: {
-                      exame_clinico_geral: { type: "string" },
-                      exame_clinico_especifico: { type: "array", items: { type: "string" } },
-                      dentes_afetados: { type: "array", items: { type: "string" } }
-                    },
-                    required: ["exame_clinico_geral", "exame_clinico_especifico", "dentes_afetados"],
-                    additionalProperties: false
-                  },
-                  assessment: {
-                    type: "object",
-                    properties: {
-                      diagnosticos: { type: "array", items: { type: "string" } },
-                      red_flags: { type: "array", items: { type: "string" } }
-                    },
-                    required: ["diagnosticos", "red_flags"],
-                    additionalProperties: false
-                  },
-                  plan: {
-                    type: "object",
-                    properties: {
-                      tratamentos: {
-                        type: "array",
-                        items: {
+                        },
+                        objective: {
                           type: "object",
                           properties: {
-                            procedimento: { type: "string" },
-                            dente: { type: "string" },
-                            urgencia: { type: "string", enum: ["baixa", "media", "alta"] }
+                            exame_clinico_geral: { type: "string" },
+                            exame_clinico_especifico: { type: "array", items: { type: "string" } },
+                            dentes_afetados: { type: "array", items: { type: "string" } }
                           },
-                          required: ["procedimento", "dente", "urgencia"],
+                          required: ["exame_clinico_geral", "exame_clinico_especifico", "dentes_afetados"],
+                          additionalProperties: false
+                        },
+                        assessment: {
+                          type: "object",
+                          properties: {
+                            diagnosticos: { type: "array", items: { type: "string" } },
+                            red_flags: { type: "array", items: { type: "string" } }
+                          },
+                          required: ["diagnosticos", "red_flags"],
+                          additionalProperties: false
+                        },
+                        plan: {
+                          type: "object",
+                          properties: {
+                            tratamentos: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  procedimento: { type: "string" },
+                                  dente: { type: "string" },
+                                  urgencia: { type: "string", enum: ["baixa", "media", "alta"] }
+                                },
+                                required: ["procedimento", "dente", "urgencia"],
+                                additionalProperties: false
+                              }
+                            },
+                            orientacoes: { type: "array", items: { type: "string" } },
+                            lembretes_clinicos: { type: "array", items: { type: "string" } }
+                          },
+                          required: ["tratamentos", "orientacoes", "lembretes_clinicos"],
                           additionalProperties: false
                         }
                       },
-                      orientacoes: { type: "array", items: { type: "string" } },
-                      lembretes_clinicos: { type: "array", items: { type: "string" } }
-                    },
-                    required: ["tratamentos", "orientacoes", "lembretes_clinicos"],
-                    additionalProperties: false
+                      required: ["subjective", "objective", "assessment", "plan"],
+                      additionalProperties: false
+                    }
                   }
-                },
-                required: ["subjective", "objective", "assessment", "plan"],
-                additionalProperties: false
-              }
+                }
+              });
             }
+          );
+
+          // Parse and validate response
+          let soapNote: SOAPNote;
+          try {
+            const content = response.choices[0]?.message?.content;
+            if (!content) {
+              throw new Error("Empty response from LLM");
+            }
+            soapNote = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
+          } catch (parseError) {
+            throw new ServiceError(
+              ErrorCode.LLM_RESPONSE_INVALID,
+              "Resposta da IA em formato inválido. Tente novamente.",
+              { consultationId: input.consultationId },
+              parseError instanceof Error ? parseError : undefined
+            );
           }
-        });
 
-        const content = response.choices[0].message.content;
-        const soapNote: SOAPNote = JSON.parse(typeof content === 'string' ? content : JSON.stringify(content));
+          // Update consultation with SOAP note
+          // If this fails, we want to know - don't catch DB errors here
+          await updateConsultation(input.consultationId, {
+            soapNote: soapNote,
+          });
 
-        // Update consultation with SOAP note
-        await updateConsultation(input.consultationId, {
-          soapNote: soapNote,
-        });
+          return { success: true, soapNote };
+        } catch (error) {
+          // If it's already a ServiceError, rethrow it
+          if (error instanceof ServiceError) {
+            throw error;
+          }
 
-        return { success: true, soapNote };
+          // Otherwise, wrap it
+          throw new ServiceError(
+            ErrorCode.LLM_RESPONSE_FAILED,
+            "Erro inesperado ao gerar análise SOAP",
+            { consultationId: input.consultationId },
+            error instanceof Error ? error : undefined
+          );
+        }
       }),
 
     updateSOAP: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-        soapNote: z.any(),
-      }))
+      .input(updateSOAPSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -410,9 +449,7 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
       }),
 
     finalize: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .input(finalizeConsultationSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -428,9 +465,7 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
       }),
 
     exportPDF: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .input(exportPDFSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -441,18 +476,38 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
           throw new Error("No SOAP note available for this consultation");
         }
 
-        const pdfBuffer = await generateConsultationPDF({
-          patientName: consultation.patientName,
-          consultationDate: consultation.createdAt,
-          dentistName: ctx.user.name || "Dentista",
-          dentistCRO: ctx.user.croNumber || undefined,
-          soapNote: consultation.soapNote,
-        });
+        try {
+          const pdfBuffer = await wrapServiceCall(
+            "PDF Generator",
+            ErrorCode.PDF_GENERATION_FAILED,
+            "Falha ao gerar PDF. Tente novamente em alguns minutos.",
+            async () => {
+              return await generateConsultationPDF({
+                patientName: consultation.patientName,
+                consultationDate: consultation.createdAt,
+                dentistName: ctx.user.name || "Dentista",
+                dentistCRO: ctx.user.croNumber || undefined,
+                soapNote: consultation.soapNote!,
+              });
+            }
+          );
 
-        // Convert buffer to base64 for transmission
-        const base64PDF = pdfBuffer.toString('base64');
+          // Convert buffer to base64 for transmission
+          const base64PDF = pdfBuffer.toString('base64');
 
-        return { success: true, pdfData: base64PDF };
+          return { success: true, pdfData: base64PDF };
+        } catch (error) {
+          if (error instanceof ServiceError) {
+            throw error;
+          }
+
+          throw new ServiceError(
+            ErrorCode.PDF_GENERATION_FAILED,
+            "Erro inesperado ao gerar PDF",
+            { consultationId: input.consultationId },
+            error instanceof Error ? error : undefined
+          );
+        }
       }),
   }),
 
