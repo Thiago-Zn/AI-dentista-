@@ -3,9 +3,9 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { 
-  createPatient, 
-  getPatientsByDentist, 
+import {
+  createPatient,
+  getPatientsByDentist,
   getPatientById,
   updatePatient,
   createConsultation,
@@ -24,6 +24,21 @@ import { SOAPNote } from "../drizzle/schema";
 import { nanoid } from "nanoid";
 import { generateConsultationPDF } from "./pdfGenerator";
 
+// Import strict validation schemas
+import { createPatientSchema, updatePatientSchema, getPatientByIdSchema } from "../shared/schemas/patient";
+import {
+  createConsultationSchema,
+  uploadAudioSchema,
+  updateTranscriptSchema,
+  transcribeAudioSchema,
+  analyzeAndGenerateSOAPSchema,
+  updateSOAPSchema,
+  finalizeConsultationSchema,
+  exportPDFSchema,
+  getConsultationByIdSchema,
+  getConsultationsByPatientSchema,
+} from "../shared/schemas/consultation";
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -39,25 +54,11 @@ export const appRouter = router({
 
   patients: router({
     create: protectedProcedure
-      .input(z.object({
-        name: z.string(),
-        birthDate: z.string().optional(),
-        phone: z.string().optional(),
-        email: z.string().optional(),
-        cpf: z.string().optional(),
-        medicalHistory: z.string().optional(),
-        allergies: z.string().optional(),
-      }))
+      .input(createPatientSchema)
       .mutation(async ({ ctx, input }) => {
         await createPatient({
           dentistId: ctx.user.id,
-          name: input.name,
-          birthDate: input.birthDate,
-          phone: input.phone,
-          email: input.email,
-          cpf: input.cpf,
-          medicalHistory: input.medicalHistory,
-          allergies: input.allergies,
+          ...input,
         });
         return { success: true };
       }),
@@ -67,7 +68,7 @@ export const appRouter = router({
     }),
 
     getById: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(getPatientByIdSchema)
       .query(async ({ ctx, input }) => {
         const patient = await getPatientById(input.id);
         if (!patient || patient.dentistId !== ctx.user.id) {
@@ -77,18 +78,13 @@ export const appRouter = router({
       }),
 
     update: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        birthDate: z.string().optional(),
-        medicalHistory: z.string().optional(),
-      }))
+      .input(updatePatientSchema)
       .mutation(async ({ ctx, input }) => {
         const patient = await getPatientById(input.id);
         if (!patient || patient.dentistId !== ctx.user.id) {
           throw new Error("Patient not found or access denied");
         }
-        
+
         const { id, ...updateData } = input;
         await updatePatient(id, updateData);
         return { success: true };
@@ -97,11 +93,7 @@ export const appRouter = router({
 
   consultations: router({
     create: protectedProcedure
-      .input(z.object({
-        patientId: z.number(),
-        patientName: z.string(),
-        templateUsed: z.string().optional(),
-      }))
+      .input(createConsultationSchema)
       .mutation(async ({ ctx, input }) => {
         const result = await createConsultation({
           dentistId: ctx.user.id,
@@ -118,7 +110,7 @@ export const appRouter = router({
     }),
 
     getById: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(getConsultationByIdSchema)
       .query(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.id);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -128,18 +120,13 @@ export const appRouter = router({
       }),
 
     getByPatient: protectedProcedure
-      .input(z.object({ patientId: z.number() }))
+      .input(getConsultationsByPatientSchema)
       .query(async ({ ctx, input }) => {
         return await getConsultationsByPatient(input.patientId, ctx.user.id);
       }),
 
     uploadAudio: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-        audioData: z.string(), // base64 encoded audio
-        mimeType: z.string(),
-        durationSeconds: z.number(),
-      }))
+      .input(uploadAudioSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -164,10 +151,7 @@ export const appRouter = router({
       }),
 
     updateTranscript: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-        transcript: z.string(),
-      }))
+      .input(updateTranscriptSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -182,9 +166,7 @@ export const appRouter = router({
       }),
 
     transcribe: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .input(transcribeAudioSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -216,9 +198,7 @@ export const appRouter = router({
       }),
 
     analyzeAndGenerateSOAP: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .input(analyzeAndGenerateSOAPSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -392,10 +372,7 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
       }),
 
     updateSOAP: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-        soapNote: z.any(),
-      }))
+      .input(updateSOAPSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -410,9 +387,7 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
       }),
 
     finalize: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .input(finalizeConsultationSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
@@ -428,9 +403,7 @@ Seja preciso, conciso e use terminologia clínica apropriada.`;
       }),
 
     exportPDF: protectedProcedure
-      .input(z.object({
-        consultationId: z.number(),
-      }))
+      .input(exportPDFSchema)
       .mutation(async ({ ctx, input }) => {
         const consultation = await getConsultationById(input.consultationId);
         if (!consultation || consultation.dentistId !== ctx.user.id) {
